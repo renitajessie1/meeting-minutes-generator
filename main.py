@@ -1,12 +1,18 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from database import init_db, save_meeting, get_all_meetings, search_meetings, get_meeting_by_id
 from export import meeting_to_markdown, meeting_to_pdf
 from file_parser import extract_text
 from fastapi.responses import Response
+from extractor.service import MeetingMinutesExtractor
+from auth import hash_password, verify_password, create_access_token
+from database import get_connection
 
 app = FastAPI(title="Meeting Minutes API")
-
+extractor = MeetingMinutesExtractor()
 @app.on_event("startup")
 def startup_event():
     init_db()
@@ -27,11 +33,30 @@ def process_transcript(transcript: str):
     if not transcript or not transcript.strip():
         raise HTTPException(status_code=400, detail="Transcript cannot be empty")
 
-    # TEMPORARY stub values — will be replaced by Person A's AI output
-    summary = "This is a placeholder summary."
-    action_items = "No action items yet."
-    decisions = "No decisions yet."
-    deadlines = "No deadlines yet."
+    result = extractor.extract(transcript)
+    result_dict = result.to_dict()
+
+    if not result_dict.get("success"):
+        raise HTTPException(status_code=502, detail=result_dict.get("error") or "AI extraction failed")
+
+    data = result_dict["data"]
+    summary = data.get("summary")
+
+    def format_list_field(field):
+        if not isinstance(field, list):
+            return field
+        lines = []
+        for item in field:
+            if isinstance(item, dict):
+                # Join dict values like "Jyothika: Handle the database fixes"
+                lines.append(" - ".join(str(v) for v in item.values()))
+            else:
+                lines.append(str(item))
+        return "\n".join(lines)
+
+    action_items = format_list_field(data.get("action_items"))
+    decisions = format_list_field(data.get("decisions"))
+    deadlines = format_list_field(data.get("deadlines"))
 
     save_meeting(transcript, summary, action_items, decisions, deadlines)
     return {
@@ -39,7 +64,8 @@ def process_transcript(transcript: str):
         "action_items": action_items,
         "decisions": decisions,
         "deadlines": deadlines
-    }
+    
+        }
 
 @app.post("/upload-transcript")
 async def upload_transcript(file: UploadFile = File(...)):
@@ -57,11 +83,15 @@ async def upload_transcript(file: UploadFile = File(...)):
     if not transcript or not transcript.strip():
         raise HTTPException(status_code=400, detail="No readable text found in the uploaded file")
 
-    # Same placeholder logic as /process-transcript — will be replaced by Person A's AI output
-    summary = "This is a placeholder summary."
-    action_items = "No action items yet."
-    decisions = "No decisions yet."
-    deadlines = "No deadlines yet."
+    result = extractor.extract(transcript)
+
+    if not result.success:
+        raise HTTPException(status_code=502, detail=f"AI extraction failed: {result.error}")
+
+    summary = result.data["summary"]
+    action_items = result.data["action_items"]
+    decisions = result.data["decisions"]
+    deadlines = result.data["deadlines"]
 
     save_meeting(transcript, summary, action_items, decisions, deadlines)
     return {
@@ -113,3 +143,51 @@ def export_pdf(meeting_id: int):
             "Content-Disposition": f"attachment; filename=meeting_{meeting_id}.pdf"
         }
     )
+
+
+from pydantic import BaseModel
+
+class SignupRequest(BaseModel):
+    username: str
+    password: str
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/signup")
+def signup(payload: SignupRequest):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id FROM users WHERE username = ?", (payload.username,))
+    existing = cursor.fetchone()
+    if existing:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Username already taken")
+
+    hashed = hash_password(payload.password)
+    cursor.execute(
+        "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+        (payload.username, hashed)
+    )
+    conn.commit()
+    conn.close()
+    return {"message": "Account created successfully"}
+
+
+@app.post("/login")
+def login(payload: LoginRequest):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM users WHERE username = ?", (payload.username,))
+    user = cursor.fetchone()
+    conn.close()
+
+    if not user or not verify_password(payload.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    token = create_access_token({"sub": user["username"]})
+    return {"access_token": token, "token_type": "bearer"}
