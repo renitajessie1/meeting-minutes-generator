@@ -10,6 +10,7 @@ from fastapi.responses import Response
 from extractor.service import MeetingMinutesExtractor
 from auth import hash_password, verify_password, create_access_token
 from database import get_connection
+from fastapi.responses import FileResponse
 
 app = FastAPI(title="Meeting Minutes API")
 extractor = MeetingMinutesExtractor()
@@ -26,7 +27,7 @@ app.add_middleware(
 
 @app.get("/")
 def root():
-    return {"status": "API is running"}
+    return FileResponse("index.html")
 
 @app.post("/process-transcript")
 def process_transcript(transcript: str):
