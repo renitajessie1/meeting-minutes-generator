@@ -3,7 +3,7 @@
 // ============================================
 // Change this to your deployed backend URL when ready
 // e.g. "https://your-app.up.railway.app"
-const API_BASE_URL = "http://127.0.0.1:8000";
+const API_BASE_URL = "https://meeting-minutes-generator-production.up.railway.app";
 
 // ============================================
 // THEME
