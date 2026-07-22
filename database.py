@@ -1,12 +1,17 @@
-import sqlite3
+import psycopg
+from psycopg.rows import dict_row
 from datetime import datetime, timedelta, timezone
 
-DB_NAME = "meetings.db"
+import os
+
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 
 def get_connection():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
+    conn = psycopg.connect(
+        DATABASE_URL,
+        row_factory=dict_row
+    )
     return conn
 
 
@@ -16,7 +21,7 @@ def init_db():
     cursor.execute(
         """
         CREATE TABLE IF NOT EXISTS meetings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             transcript TEXT,
             summary TEXT,
             action_items TEXT,
@@ -29,7 +34,7 @@ def init_db():
     cursor.execute(
         """
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -50,7 +55,7 @@ def save_meeting(transcript, summary, action_items, decisions, deadlines):
     cursor.execute(
         """
         INSERT INTO meetings (transcript, summary, action_items, decisions, deadlines, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s)
         """,
         (transcript, summary, action_items, decisions, deadlines, created_at),
     )
@@ -85,7 +90,7 @@ def search_meetings(keyword):
     cursor = conn.cursor()
     cursor.execute("""
         SELECT * FROM meetings
-        WHERE transcript LIKE ?
+        WHERE transcript ILIKE %s
         ORDER BY created_at DESC
     """, (f"%{keyword}%",))
     rows = cursor.fetchall()
@@ -107,7 +112,7 @@ def search_meetings(keyword):
 def get_meeting_by_id(meeting_id):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM meetings WHERE id = ?", (meeting_id,))
+    cursor.execute("SELECT * FROM meetings WHERE id = %s", (meeting_id,))
     row = cursor.fetchone()
     conn.close()
 

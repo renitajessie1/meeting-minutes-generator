@@ -42,17 +42,23 @@ def process_transcript(transcript: str):
     data = result_dict["data"]
     summary = data.get("summary")
 
-    def format_list_field(field):
-        if not isinstance(field, list):
-            return field
-        lines = []
-        for item in field:
-            if isinstance(item, dict):
-                # Join dict values like "Jyothika: Handle the database fixes"
-                lines.append(" - ".join(str(v) for v in item.values()))
+def format_list_field(field):
+    if not isinstance(field, list):
+        return str(field)
+
+    lines = []
+    for item in field:
+        if isinstance(item, dict):
+            if "owner" in item and "task" in item:
+                lines.append(f"• {item['owner']}: {item['task']}")
+            elif "item" in item and "due" in item:
+                lines.append(f"• {item['item']} (Due: {item['due']})")
             else:
-                lines.append(str(item))
-        return "\n".join(lines)
+                lines.append(" - ".join(str(v) for v in item.values()))
+        else:
+            lines.append(f"• {item}")
+
+    return "\n".join(lines)
 
     action_items = format_list_field(data.get("action_items"))
     decisions = format_list_field(data.get("decisions"))
@@ -88,10 +94,11 @@ async def upload_transcript(file: UploadFile = File(...)):
     if not result.success:
         raise HTTPException(status_code=502, detail=f"AI extraction failed: {result.error}")
 
+
     summary = result.data["summary"]
-    action_items = result.data["action_items"]
-    decisions = result.data["decisions"]
-    deadlines = result.data["deadlines"]
+    action_items = format_list_field(result.data["action_items"])
+    decisions = format_list_field(result.data["decisions"])
+    deadlines = format_list_field(result.data["deadlines"])
 
     save_meeting(transcript, summary, action_items, decisions, deadlines)
     return {
@@ -161,7 +168,7 @@ def signup(payload: SignupRequest):
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT id FROM users WHERE username = ?", (payload.username,))
+    cursor.execute("SELECT id FROM users WHERE username = %s", (payload.username,))
     existing = cursor.fetchone()
     if existing:
         conn.close()
@@ -169,7 +176,7 @@ def signup(payload: SignupRequest):
 
     hashed = hash_password(payload.password)
     cursor.execute(
-        "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+        "INSERT INTO users (username, password_hash) VALUES (%s, %s)",
         (payload.username, hashed)
     )
     conn.commit()
@@ -182,7 +189,7 @@ def login(payload: LoginRequest):
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM users WHERE username = ?", (payload.username,))
+    cursor.execute("SELECT * FROM users WHERE username = %s", (payload.username,))
     user = cursor.fetchone()
     conn.close()
 
