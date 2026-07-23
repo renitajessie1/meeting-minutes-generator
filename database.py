@@ -32,6 +32,13 @@ def init_db():
         )
         """
     )
+
+    cursor.execute(
+    """
+    ALTER TABLE meetings ADD COLUMN IF NOT EXISTS username TEXT
+    """
+    )   
+    
     cursor.execute(
         """
         CREATE TABLE IF NOT EXISTS users (
