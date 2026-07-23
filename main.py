@@ -35,13 +35,22 @@ def process_transcript(transcript: str):
         raise HTTPException(status_code=400, detail="Transcript cannot be empty")
 
     result = extractor.extract(transcript)
-    result_dict = result.to_dict()
 
-    if not result_dict.get("success"):
-        raise HTTPException(status_code=502, detail=result_dict.get("error") or "AI extraction failed")
+    if not result.success:
+        raise HTTPException(status_code=502, detail=f"AI extraction failed: {result.error}")
 
-    data = result_dict["data"]
-    summary = data.get("summary")
+    summary = result.data["summary"]
+    action_items = format_list_field(result.data["action_items"])
+    decisions = format_list_field(result.data["decisions"])
+    deadlines = format_list_field(result.data["deadlines"])
+
+    save_meeting(transcript, summary, action_items, decisions, deadlines)
+    return {
+        "summary": summary,
+        "action_items": action_items,
+        "decisions": decisions,
+        "deadlines": deadlines
+    }
 
 def format_list_field(field):
     if not isinstance(field, list):
