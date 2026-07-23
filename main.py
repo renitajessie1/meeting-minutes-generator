@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from database import init_db, save_meeting, get_all_meetings, search_meetings, get_meeting_by_id
 from export import meeting_to_markdown, meeting_to_pdf
@@ -11,7 +11,6 @@ from extractor.service import MeetingMinutesExtractor
 from auth import hash_password, verify_password, create_access_token
 from database import get_connection
 from fastapi.responses import FileResponse
-from fastapi import Header
 from auth import decode_access_token
 
 app = FastAPI(title="Meeting Minutes API")
