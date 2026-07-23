@@ -27,7 +27,7 @@ def get_current_username(authorization: str = Header(None)):
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     return payload["sub"]
-    
+
 @app.on_event("startup")
 def startup_event():
     init_db()
@@ -42,6 +42,24 @@ app.add_middleware(
 @app.get("/")
 def root():
     return FileResponse("index.html")
+
+def format_list_field(field):
+    if not isinstance(field, list):
+        return str(field)
+
+    lines = []
+    for item in field:
+        if isinstance(item, dict):
+            if "owner" in item and "task" in item:
+                lines.append(f"• {item['owner']}: {item['task']}")
+            elif "item" in item and "due" in item:
+                lines.append(f"• {item['item']} (Due: {item['due']})")
+            else:
+                lines.append(" - ".join(str(v) for v in item.values()))
+        else:
+            lines.append(f"• {item}")
+
+    return "\n".join(lines)    
 
 @app.post("/process-transcript")
 def process_transcript(transcript: str, username: str = Depends(get_current_username)):
@@ -65,6 +83,7 @@ def process_transcript(transcript: str, username: str = Depends(get_current_user
         "decisions": decisions,
         "deadlines": deadlines
     }
+
 
 @app.post("/upload-transcript")
 async def upload_transcript(file: UploadFile = File(...), username: str = Depends(get_current_username)):
