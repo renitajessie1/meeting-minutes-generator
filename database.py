@@ -22,6 +22,7 @@ def init_db():
         """
         CREATE TABLE IF NOT EXISTS meetings (
             id SERIAL PRIMARY KEY,
+            username TEXT,
             transcript TEXT,
             summary TEXT,
             action_items TEXT,
@@ -45,7 +46,7 @@ def init_db():
     conn.close()
 
 
-def save_meeting(transcript, summary, action_items, decisions, deadlines):
+def save_meeting(username, transcript, summary, action_items, decisions, deadlines):
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -54,48 +55,57 @@ def save_meeting(transcript, summary, action_items, decisions, deadlines):
 
     cursor.execute(
         """
-        INSERT INTO meetings (transcript, summary, action_items, decisions, deadlines, created_at)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        INSERT INTO meetings (username, transcript, summary, action_items, decisions, deadlines, created_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         """,
-        (transcript, summary, action_items, decisions, deadlines, created_at),
+        (username, transcript, summary, action_items, decisions, deadlines, created_at),
     )
     conn.commit()
     conn.close()
 
-
-def get_all_meetings():
+def get_all_meetings(username):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM meetings ORDER BY created_at DESC")
+    cursor.execute("SELECT * FROM meetings WHERE username = %s ORDER BY created_at DESC", (username,))
     rows = cursor.fetchall()
     conn.close()
 
     meetings = []
     for row in rows:
-        meetings.append(
-            {
-                "id": row["id"],
-                "transcript": row["transcript"],
-                "summary": row["summary"],
-                "action_items": row["action_items"],
-                "decisions": row["decisions"],
-                "deadlines": row["deadlines"],
-                "created_at": row["created_at"],
-            }
-        )
+        meetings.append({
+            "id": row["id"],
+            "transcript": row["transcript"],
+            "summary": row["summary"],
+            "action_items": row["action_items"],
+            "decisions": row["decisions"],
+            "deadlines": row["deadlines"],
+            "created_at": row["created_at"],
+        })
     return meetings
 
-def search_meetings(keyword):
+def search_meetings(username, keyword):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
         SELECT * FROM meetings
-        WHERE transcript ILIKE %s
+        WHERE username = %s AND transcript ILIKE %s
         ORDER BY created_at DESC
-    """, (f"%{keyword}%",))
+    """, (username, f"%{keyword}%",))
     rows = cursor.fetchall()
     conn.close()
 
+    meetings = []
+    for row in rows:
+        meetings.append({
+            "id": row["id"],
+            "transcript": row["transcript"],
+            "summary": row["summary"],
+            "action_items": row["action_items"],
+            "decisions": row["decisions"],
+            "deadlines": row["deadlines"],
+            "created_at": row["created_at"]
+        })
+    return meetings
     meetings = []
     for row in rows:
         meetings.append({

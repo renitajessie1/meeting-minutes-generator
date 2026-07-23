@@ -144,9 +144,15 @@ function formatTimestamp(ts) {
 // API CALLS
 // ============================================
 async function processTranscriptText(transcript) {
+  const token = localStorage.getItem("token");
   const url = new URL(`${API_BASE_URL}/process-transcript`);
   url.searchParams.set("transcript", transcript);
-  const res = await fetch(url, { method: "POST" });
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${token}`
+    }
+  });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || `Request failed (${res.status})`);
@@ -155,10 +161,14 @@ async function processTranscriptText(transcript) {
 }
 
 async function uploadTranscriptFile(file) {
+  const token = localStorage.getItem("token");
   const formData = new FormData();
   formData.append("file", file);
   const res = await fetch(`${API_BASE_URL}/upload-transcript`, {
     method: "POST",
+    headers: {
+      "Authorization": `Bearer ${token}`
+    },
     body: formData,
   });
   if (!res.ok) {
@@ -169,21 +179,30 @@ async function uploadTranscriptFile(file) {
 }
 
 async function fetchHistory() {
-  const res = await fetch(`${API_BASE_URL}/history`);
+  const token = localStorage.getItem("token");
+  const res = await fetch(`${API_BASE_URL}/history`, {
+    headers: {
+      "Authorization": `Bearer ${token}`
+    }
+  });
   if (!res.ok) throw new Error("Could not load history");
   const data = await res.json();
   return data.meetings || [];
 }
 
 async function fetchSearch(keyword) {
+  const token = localStorage.getItem("token");
   const url = new URL(`${API_BASE_URL}/search`);
   url.searchParams.set("keyword", keyword);
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    headers: {
+      "Authorization": `Bearer ${token}`
+    }
+  });
   if (!res.ok) throw new Error("Search failed");
   const data = await res.json();
   return data.meetings || [];
 }
-
 // ============================================
 // NEW MEETING — TEXT
 // ============================================

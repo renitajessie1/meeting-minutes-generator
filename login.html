@@ -258,7 +258,9 @@
         messageEl.classList.add("error");
         return;
       }
-
+      if (mode === "login" && data.access_token) {
+        localStorage.setItem("token", data.access_token);
+      }
       if (mode === "login") {
         localStorage.setItem("access_token", data.access_token);
         window.location.href = "index.html";

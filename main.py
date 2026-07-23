@@ -11,9 +11,21 @@ from extractor.service import MeetingMinutesExtractor
 from auth import hash_password, verify_password, create_access_token
 from database import get_connection
 from fastapi.responses import FileResponse
+from fastapi import Header
+from auth import decode_access_token
 
 app = FastAPI(title="Meeting Minutes API")
 extractor = MeetingMinutesExtractor()
+
+def get_current_username(authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    token = authorization.replace("Bearer ", "")
+    payload = decode_access_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    return payload["sub"]
+
 @app.on_event("startup")
 def startup_event():
     init_db()
@@ -30,7 +42,7 @@ def root():
     return FileResponse("index.html")
 
 @app.post("/process-transcript")
-def process_transcript(transcript: str):
+def process_transcript(transcript: str, username: str = Depends(get_current_username)):
     if not transcript or not transcript.strip():
         raise HTTPException(status_code=400, detail="Transcript cannot be empty")
 
@@ -44,7 +56,7 @@ def process_transcript(transcript: str):
     decisions = format_list_field(result.data["decisions"])
     deadlines = format_list_field(result.data["deadlines"])
 
-    save_meeting(transcript, summary, action_items, decisions, deadlines)
+    save_meeting(username, transcript, summary, action_items, decisions, deadlines)
     return {
         "summary": summary,
         "action_items": action_items,
@@ -52,39 +64,8 @@ def process_transcript(transcript: str):
         "deadlines": deadlines
     }
 
-def format_list_field(field):
-    if not isinstance(field, list):
-        return str(field)
-
-    lines = []
-    for item in field:
-        if isinstance(item, dict):
-            if "owner" in item and "task" in item:
-                lines.append(f"• {item['owner']}: {item['task']}")
-            elif "item" in item and "due" in item:
-                lines.append(f"• {item['item']} (Due: {item['due']})")
-            else:
-                lines.append(" - ".join(str(v) for v in item.values()))
-        else:
-            lines.append(f"• {item}")
-
-    return "\n".join(lines)
-
-    action_items = format_list_field(data.get("action_items"))
-    decisions = format_list_field(data.get("decisions"))
-    deadlines = format_list_field(data.get("deadlines"))
-
-    save_meeting(transcript, summary, action_items, decisions, deadlines)
-    return {
-        "summary": summary,
-        "action_items": action_items,
-        "decisions": decisions,
-        "deadlines": deadlines
-    
-        }
-
 @app.post("/upload-transcript")
-async def upload_transcript(file: UploadFile = File(...)):
+async def upload_transcript(file: UploadFile = File(...), username: str = Depends(get_current_username)):
     # Only allow .docx and .pdf files
     if not (file.filename.lower().endswith(".docx") or file.filename.lower().endswith(".pdf")):
         raise HTTPException(status_code=400, detail="Only .docx and .pdf files are supported")
@@ -110,7 +91,7 @@ async def upload_transcript(file: UploadFile = File(...)):
     decisions = format_list_field(result.data["decisions"])
     deadlines = format_list_field(result.data["deadlines"])
 
-    save_meeting(transcript, summary, action_items, decisions, deadlines)
+    save_meeting(username, transcript, summary, action_items, decisions, deadlines)    
     return {
         "summary": summary,
         "action_items": action_items,
@@ -119,15 +100,15 @@ async def upload_transcript(file: UploadFile = File(...)):
     }
 
 @app.get("/history")
-def get_history():
-    return {"meetings": get_all_meetings()}
+def get_history(username: str = Depends(get_current_username)):
+    return {"meetings": get_all_meetings(username)}
 
 @app.get("/search")
-def search_history(keyword: str):
+def search(keyword: str, username: str = Depends(get_current_username)):
     if not keyword or not keyword.strip():
         raise HTTPException(status_code=400, detail="Search keyword cannot be empty")
 
-    return {"meetings": search_meetings(keyword)}
+    return {"meetings": search_meetings(username, keyword)}
     
 @app.get("/export/markdown/{meeting_id}")
 def export_markdown(meeting_id: int):
