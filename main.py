@@ -20,11 +20,14 @@ def get_current_username(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
     token = authorization.replace("Bearer ", "")
-    payload = decode_access_token(token)
+    try:
+        payload = decode_access_token(token)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     return payload["sub"]
-
+    
 @app.on_event("startup")
 def startup_event():
     init_db()
